@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AgriPulse</title>
+    <link rel="manifest" href="manifest.json">
+    <script type="importmap">
+    {
+      "imports": {
+        "react": "https://aistudiocdn.com/react@^19.2.0",
+        "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+        "react/": "https://aistudiocdn.com/react@^19.2.0/",
+        "@google/genai": "https://aistudiocdn.com/@google/genai@^1.28.0"
+      }
+    }
+    </script>
+    <style>
+        :root {
+            --brand-black: #0B0B0D;
+            --brand-silver: #C0C0C0;
+            --brand-gold: #D4AF37;
+            --brand-gold-hover: #E6C55E;
+            --brand-positive: #28a745;
+            --brand-critical: #E57373;
+        }
+        *, *::before, *::after {
+            box-sizing: border-box;
+        }
+        body {
+            background-color: var(--brand-black);
+            color: var(--brand-silver);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+        }
+        .page {
+            display: none;
+            width: 95%;
+            max-width: 600px;
+            margin: 1rem auto 4rem auto;
+            padding: 1rem;
+        }
+        .page.active { display: block; }
+        h1 { color: #FFFFFF; font-size: 2.5rem; margin-bottom: 0.5rem; }
+        h2 { color: #FFFFFF; margin-top: 0; }
+        p { font-size: 1rem; line-height: 1.5; }
+        a { color: var(--brand-gold); text-decoration: none; font-weight: bold; cursor: pointer; }
+        a:hover { text-decoration: underline; }
+
+        .btn {
+            font-weight: 700; border: 2px solid transparent; border-radius: 8px; padding: 0.75rem 1.5rem; cursor: pointer; transition: all 0.3s ease; width: 100%; text-align: center; font-size: 1rem;
+        }
+        .primary-btn { background-color: var(--brand-gold); color: var(--brand-black); border-color: var(--brand-gold); }
+        .primary-btn:hover { background-color: var(--brand-gold-hover); }
+        .secondary-btn { background-color: transparent; color: var(--brand-silver); border-color: var(--brand-silver); }
+        .secondary-btn:hover { background-color: var(--brand-silver); color: var(--brand-black); }
+        .add-btn { background-color: transparent; color: var(--brand-gold); border: 2px dashed var(--brand-gold); padding: 0.5rem 1rem; }
+        .add-btn:hover { background-color: rgba(212, 175, 55, 0.1); }
+        .edit-btn { background-color: transparent; color: var(--brand-gold); border: 2px solid var(--brand-gold); border-radius: 8px; padding: 0.5rem 1rem; cursor: pointer; }
+        .edit-btn:hover { background-color: var(--brand-gold); color: var(--brand-black); }
+        .form-section { background-color: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 12px; padding: 1.5rem; margin-bottom: 2rem; }
+        .form-section h3 { color: #FFFFFF; border-bottom: 2px solid var(--brand-gold); padding-bottom: 0.5rem; margin-top: 0; font-size: 1.25rem; }
+        label { display: block; font-size: 0.9rem; font-weight: bold; margin-top: 1rem; margin-bottom: 0.5rem; }
+        input[type="number"], input[type="date"], input[type="text"], select, textarea { background-color: var(--brand-black); color: #FFFFFF; border: 1px solid rgba(255, 255, 255, 0.5); border-radius: 8px; padding: 0.75rem; width: 100%; font-size: 1.1rem; }
+        input[type="number"]:focus, input[type="date"]:focus, input[type="text"]:focus, select:focus, textarea:focus { outline: none; border-color: var(--brand-gold); box-shadow: 0 0 10px rgba(212, 175, 55, 0.3); }
+        select { appearance: none; background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23c0c0c0' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e"); background-repeat: no-repeat; background-position: right 0.75rem center; background-size: 1em; padding-right: 2.5rem; }
+        .input-with-suffix { position: relative; display: flex; align-items: center; }
+        .input-with-suffix input { padding-right: 3rem; }
+        .input-with-suffix span { position: absolute; right: 1rem; color: var(--brand-silver); }
+        .input-group { display: flex; gap: 1rem; }
+        .input-group > div { flex: 1; }
+        
+        .dynamic-price-row { display: flex; gap: 1rem; align-items: center; margin-bottom: 0.5rem; }
+        .dynamic-price-row label { flex: 1; margin: 0; color: #FFFFFF; }
+        .dynamic-price-row input { flex: 2; }
+        .header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;}
+        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 1rem; margin: 2rem 0; }
+        .kpi-card { background-color: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 12px; padding: 1.5rem; text-align: center; }
+        .kpi-card h3 { margin: 0 0 0.5rem 0; font-size: 0.8rem; color: var(--brand-silver); text-transform: uppercase; }
+        .kpi-value { font-size: 2rem; font-weight: bold; color: var(--brand-gold); margin: 0; word-wrap: break-word;}
+        .kpi-value.negative { color: var(--brand-critical); }
+        .advisor-section { margin: 2rem 0; }
+        .advisor-section h3 { color: #FFFFFF; }
+        .advisor-card { border-radius: 8px; padding: 1rem; margin-bottom: 1rem; border: 1px solid; display: none; }
+        .advisor-card.warning { border-color: var(--brand-gold); background-color: rgba(212, 175, 55, 0.1); }
+        .advisor-card.positive { border-color: var(--brand-positive); background-color: rgba(40, 167, 69, 0.1); }
+        .advisor-card.critical { border-color: var(--brand-critical); background-color: rgba(229, 115, 115, 0.1); }
+        .dashboard-actions { margin-top: 2rem; display: flex; flex-direction: column; gap: 1rem; }
+        .log-card { background-color: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 12px; padding: 1.5rem; margin-bottom: 1rem; list-style: none; }
+        .log-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+        .log-card-header h3 { margin: 0; color: #FFFFFF; font-size: 1.2rem; }
+        .log-card-body { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem 1rem; font-size: 0.9rem; }
+        .log-card-body p { margin: 0; }
+        .log-card-body span { font-weight: bold; color: #FFFFFF; }
+        #modal-overlay { position: fixed; inset: 0; background-color: rgba(0, 0, 0, 0.7); z-index: 100; display: none; }
+        #modal-overlay.active { display: block; }
+        .modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 90%; max-width: 500px; max-height: 90vh; background-color: var(--brand-black); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 12px; z-index: 101; display: none; flex-direction: column; }
+        .modal.active { display: flex; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 1.5rem; border-bottom: 1px solid rgba(255, 255, 255, 0.2); }
+        .modal-header .close-btn { font-size: 2rem; font-weight: bold; color: var(--brand-silver); cursor: pointer; background: none; border: none; }
+        .modal-body { padding: 1.5rem; overflow-y: auto; }
+        .modal-footer { display: flex; gap: 1rem; padding: 1.5rem; border-top: 1px solid rgba(255, 255, 255, 0.2); }
+        .mortality-calc { background-color: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 8px; padding: 1rem; text-align: center; }
+        .mortality-calc-row { display: flex; justify-content: space-around; align-items: center; font-size: 1.2rem; font-weight: bold; }
+        .mortality-calc-row input { width: 80px; text-align: center; font-size: 1.2rem; font-weight: bold; }
+        #mortality-new-total { color: var(--brand-gold); }
+        .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border-width: 0; }
+        .alert-type-toggle, .filter-toggle { display: flex; border-radius: 8px; overflow: hidden; margin-top: 0.5rem; margin-bottom: 1rem; border: 1px solid rgba(255, 255, 255, 0.5); }
+        .alert-type-toggle button, .filter-toggle button { flex: 1; padding: 0.75rem; border: none; background-color: transparent; color: var(--brand-silver); cursor: pointer; font-size: 1rem; font-weight: bold; transition: background-color 0.2s; }
+        .alert-type-toggle button:not(:last-child), .filter-toggle button:not(:last-child) { border-right: 1px solid rgba(255, 255, 255, 0.5); }
+        .alert-type-toggle button.active, .filter-toggle button.active { background-color: var(--brand-gold); color: var(--brand-black); }
+        .farm-type-switcher { display: flex; border-radius: 8px; border: 1px solid var(--brand-gold); overflow: hidden; }
+        .farm-type-switcher button { background: transparent; color: var(--brand-gold); border: none; padding: 0.5rem 1rem; cursor: pointer; font-size: 0.9rem; font-weight: bold; transition: all 0.2s; }
+        .farm-type-switcher button.active { background-color: var(--brand-gold); color: var(--brand-black); }
+        #modal-egg-inputs .egg-input-group { border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 8px; padding: 0.75rem; margin-bottom: 0.5rem; }
+        #modal-egg-inputs .egg-input-group > label { margin-top: 0; margin-bottom: 0.75rem; color: #FFF; }
+        #modal-egg-inputs .egg-input-row { display: flex; gap: 1rem; align-items: center; }
+        #modal-egg-inputs .egg-input-row > div { flex: 1; }
+        #modal-egg-inputs .egg-input-row label { font-size: 0.8rem; font-weight: normal; }
+
+        .cost-toggle { margin-top: 1.5rem; }
+        .cost-toggle-header { display: flex; justify-content: space-between; align-items: center; }
+        .cost-toggle-header span { font-size: 1.1rem; font-weight: bold; color: #FFFFFF; }
+        .cost-input-container { display: none; padding-top: 0.5rem; }
+        .switch { position: relative; display: inline-block; width: 50px; height: 28px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #333; transition: .4s; }
+        .slider:before { position: absolute; content: ""; height: 20px; width: 20px; left: 4px; bottom: 4px; background-color: white; transition: .4s; }
+        input:checked + .slider { background-color: var(--brand-gold); }
+        input:focus + .slider { box-shadow: 0 0 1px var(--brand-gold); }
+        input:checked + .slider:before { transform: translateX(22px); }
+        .slider.round { border-radius: 28px; }
+        .slider.round:before { border-radius: 50%; }
+        
+        #income-summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 2rem; }
+    </style>
+</head>
+<body>
+
+    <main id="page-signin" class="page active">
+        <div style="text-align: center; padding: 2rem; background-color: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.2); border-radius: 12px; margin-top: 20vh;">
+            <h1>AgriPulse</h1>
+            <p>Your Farm, Your Data, Your Profit.</p>
+            <button class="btn primary-btn" id="signin-btn">Setup Your Farm</button>
+        </div>
+    </main>
+
+    <main id="page-settings" class="page">
+        <h1>A Bird’s Eye View of Your Farm</h1>
+        <p>Taking the Guesswork Out of Poultry Farming by tracking growth, feed use, and profits.</p>
+        <a id="nav-to-dash-from-settings" style="display: block; margin: 2rem 0;">&larr; Back to Dashboard</a>
+        
+        <div id="settings-for-layers">
+            <div class="form-section">
+                <h3>Flock Details</h3>
+                <label for="initial-birds-layers">Number of birds bought (Initial Flock)</label>
+                <input type="number" id="initial-birds-layers" placeholder="0">
+
+                <label for="flock-start-date-layers">Flock Start Date (or Hatch Date)</label>
+                <input type="date" id="flock-start-date-layers">
+                
+                <div class="cost-toggle" style="margin-top: 1rem;">
+                    <div class="cost-toggle-header">
+                        <span>Show Flock Age on Dashboard</span>
+                        <label class="switch">
+                            <input type="checkbox" id="toggle-show-flock-age-layers">
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="form-section">
+                <h3>Egg Prices (Per Crate)</h3>
+                <div id="egg-prices-list"></div>
+                <button class="btn add-btn" id="add-egg-price-btn" style="margin-top: 1rem;">+ Add New Egg Size</button>
+            </div>
+        </div>
+
+        <div id="settings-for-broilers" style="display: none;">
+            <div class="form-section">
+                 <h3>Flock Details</h3>
+                <label for="initial-birds-broilers">Number of birds bought (Initial Flock)</label>
+                <input type="number" id="initial-birds-broilers" placeholder="0">
+
+                <label for="flock-start-date-broilers">Flock Start Date (or Hatch Date)</label>
+                <input type="date" id="flock-start-date-broilers">
+                
+                <div class="cost-toggle" style="margin-top: 1rem;">
+                    <div class="cost-toggle-header">
+                        <span>Show Flock Age on Dashboard</span>
+                        <label class="switch">
+                            <input type="checkbox" id="toggle-show-flock-age-broilers">
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="form-section">
+                <h3>Broiler Goal</h3>
+                <label for="target-weight">Target Weight (grams)</label>
+                <input type="number" id="target-weight" placeholder="2000">
+            </div>
+        </div>
+
+        <div id="settings-for-fish" style="display: none;">
+             <div class="form-section">
+                <h3>Pond & Stock Details</h3>
+                <label for="fish-type">Type of Fish</label>
+                <input type="text" id="fish-type" placeholder="e.g., Catfish, Tilapia">
+                
+                <label for="stocking-date">Stocking Date</label>
+                <input type="date" id="stocking-date">
+
+                <div class="input-group">
+                    <div>
+                        <label for="initial-fish-quantity">Initial Quantity (Number of Fish)</label>
+                        <input type="number" id="initial-fish-quantity" placeholder="0">
+                    </div>
+                    <div>
+                        <label for="initial-fish-avg-weight">Avg. Initial Weight (grams)</label>
+                        <input type="number" id="initial-fish-avg-weight" placeholder="5">
+                    </div>
+                </div>
+             </div>
+        </div>
+
+        <div class="form-section">
+            <h3>Monthly Fixed Costs (Shared)</h3>
+            <label for="labor-cost">Monthly Labor Cost (₦)</label>
+            <input type="number" id="labor-cost" placeholder="0">
+            <div class="cost-toggle"><div class="cost-toggle-header"><span>Rent</span><label class="switch"><input type="checkbox" id="toggle-rent-cost"><span class="slider round"></span></label></div><div class="cost-input-container"><label for="rent-cost">Monthly Rent Cost (₦)</label><input type="number" id="rent-cost" placeholder="0"></div></div>
+            <div class="cost-toggle"><div class="cost-toggle-header"><span>Power</span><label class="switch"><input type="checkbox" id="toggle-power-cost"><span class="slider round"></span></label></div><div class="cost-input-container"><label for="power-cost">Monthly Power Cost (₦)</label><input type="number" id="power-cost" placeholder="0"></div></div>
+            <div class="cost-toggle"><div class="cost-toggle-header"><span>Water</span><label class="switch"><input type="checkbox" id="toggle-water-cost"><span class="slider round"></span></label></div><div class="cost-input-container"><label for="water-cost">Monthly Water Cost (₦)</label><input type="number" id="water-cost" placeholder="0"></div></div>
+            <div class="cost-toggle"><div class="cost-toggle-header"><span>Miscellaneous</span><label class="switch"><input type="checkbox" id="toggle-misc-cost"><span class="slider round"></span></label></div><div class="cost-input-container"><label for="misc-cost">Other Monthly Costs (₦)</label><input type="number" id="misc-cost" placeholder="0"></div></div>
+        </div>
+        
+        <div class="form-section">
+            <h3>Feed Alerts (Shared)</h3>
+            <label>Notify me when feed stock is below:</label>
+            <div class="alert-type-toggle">
+                <button id="alert-type-percent" class="active">Percentage</button>
+                <button id="alert-type-bags">Bags</button>
+            </div>
+            <div id="alert-input-percent"><label for="feed-alert-value-percent" class="sr-only">Alert percentage</label><div class="input-with-suffix"><input type="number" id="feed-alert-value-percent" placeholder="25" min="1" max="100"><span>%</span></div></div>
+            <div id="alert-input-bags" style="display: none;"><label for="feed-alert-value-bags" class="sr-only">Alert bags</label><div class="input-with-suffix"><input type="number" id="feed-alert-value-bags" placeholder="10" min="1"><span>Bags</span></div></div>
+        </div>
+        
+        <button class="btn primary-btn" id="save-settings-btn">Save Settings & Go to Dashboard</button>
+    </main>
+
+    <main id="page-dashboard" class="page">
+        <h1>Track and Grow Your Farm on the Go.</h1>
+        <p style="margin-bottom: 2rem;">AgriPulse lets you stay informed every stage of your business—tracking growth, feed use, and profits—so you can make smarter decisions.</p>
+        
+        <div class="header">
+            <div class="farm-type-switcher">
+                <button id="farm-type-layers" class="active">Layers</button>
+                <button id="farm-type-broilers">Broilers</button>
+                <button id="farm-type-fish">Fish</button>
+            </div>
+            <a id="nav-to-settings-from-dash">⚙️ Settings</a>
+        </div>
+
+        <div class="dashboard-actions">
+            <button class="btn primary-btn" id="btn-show-modal">Add / Edit Today's Log</button>
+            <button class="btn secondary-btn" id="btn-manage-feed">Manage Feed Inventory</button>
+            <button class="btn secondary-btn" id="btn-income-ledger">Income Ledger</button>
+            <button class="btn secondary-btn" id="btn-log-history">View Log History</button>
+        </div>
+        
+        <div class="advisor-section">
+            <h3>Smart Advisor</h3>
+            <div id="ai-advisor-messages"><p>Loading AI advice...</p></div>
+        </div>
+
+        <div id="kpi-grid-layers" class="kpi-grid">
+            <div class="kpi-card"><h3>Laying Capacity</h3><p class="kpi-value" id="kpi-laying-capacity">--%</p></div>
+            <div class="kpi-card"><h3>Profit / Loss (Today)</h3><p class="kpi-value" id="kpi-profit">₦--</p></div>
+            <div class="kpi-card" id="kpi-card-flock-age-layers" style="display: none;"><h3>Flock Age</h3><p class="kpi-value" id="kpi-flock-age-layers">-- days</p></div>
+            <div class="kpi-card"><h3>Feed Conversion</h3><p class="kpi-value" id="kpi-fcr">--</p></div>
+            <div class="kpi-card"><h3>Feed in Stock</h3><p class="kpi-value" id="kpi-feed-stock">-- kg</p></div>
+        </div>
+        
+        <div id="kpi-grid-broilers" class="kpi-grid" style="display: none;">
+            <div class="kpi-card"><h3>Avg. Weight</h3><p class="kpi-value" id="kpi-avg-weight">-- g</p></div>
+            <div class="kpi-card" id="kpi-card-flock-age-broilers" style="display: none;"><h3>Flock Age</h3><p class="kpi-value" id="kpi-flock-age-broilers">-- days</p></div>
+            <div class="kpi-card"><h3>FCR</h3><p class="kpi-value" id="kpi-fcr-broiler">--</p></div>
+            <div class="kpi-card"><h3>Mortality Rate</h3><p class="kpi-value" id="kpi-mortality-rate">--%</p></div>
+            <div class="kpi-card"><h3>Feed in Stock</h3><p class="kpi-value" id="kpi-feed-stock-broiler">-- kg</p></div>
+        </div>
+        
+        <div id="kpi-grid-fish" class="kpi-grid" style="display: none;">
+            <div class="kpi-card"><h3>Avg. Weight</h3><p class="kpi-value" id="kpi-avg-weight-fish">-- g</p></div>
+            <div class="kpi-card"><h3>Total Biomass</h3><p class="kpi-value" id="kpi-biomass-fish">-- kg</p></div>
+            <div class="kpi-card"><h3>FCR</h3><p class="kpi-value" id="kpi-fcr-fish">--</p></div>
+            <div class="kpi-card"><h3>Mortality Rate</h3><p class="kpi-value" id="kpi-mortality-rate-fish">--%</p></div>
+            <div class="kpi-card"><h3>Days Since Stocked</h3><p class="kpi-value" id="kpi-age-fish">-- days</p></div>
+        </div>
+    </main>
+    
+    <main id="page-feed" class="page">
+        <h1>Feed Inventory</h1>
+        <p>Log your new feed purchases here. This inventory is shared across all farm types.</p>
+        <a id="nav-to-dash-from-feed">&larr; Back to Dashboard</a>
+        <div class="form-section">
+            <h3>Add Feed Purchase</h3>
+            <label for="feed-date">Date of Purchase</label><input type="date" id="feed-date">
+            <label for="feed-bags">Number of Bags</label><input type="number" id="feed-bags" placeholder="0">
+            <label for="feed-weight">Total Weight (kg)</label><input type="number" id="feed-weight" placeholder="0">
+            <label for="feed-cost">Total Cost (₦)</label><input type="number" id="feed-cost" placeholder="0">
+        </div>
+        <button class="btn primary-btn" id="save-feed-btn" style="margin-top: 1rem;">Save Purchase</button>
+    </main>
+    
+    <main id="page-history" class="page">
+        <h1>Honest Records Build Stronger Farms.</h1>
+        <p>Here are your past entries, newest first.</p>
+        <a id="nav-to-dash-from-history">&larr; Back to Dashboard</a>
+        <ul id="log-history-list" style="padding: 0;"></ul>
+    </main>
+    
+    <main id="page-income" class="page">
+        <h1>Income Ledger</h1>
+        <p>Track all your farm's revenue streams here. Your true profitability, revealed.</p>
+        <a id="nav-to-dash-from-income">&larr; Back to Dashboard</a>
+        <button class="btn primary-btn" id="btn-add-income" style="margin-bottom: 2rem;">+ Add New Income Entry</button>
+        
+        <div class="form-section">
+            <h3>Ledger Summary</h3>
+             <div class="filter-toggle">
+                <button id="income-filter-today" class="active">Today</button>
+                <button id="income-filter-week">This Week</button>
+                <button id="income-filter-month">This Month</button>
+                <button id="income-filter-all">All Time</button>
+            </div>
+            <div id="income-summary-grid">
+                <div class="kpi-card"><h3>Total Revenue</h3><p class="kpi-value" id="income-summary-revenue">₦--</p></div>
+                <div class="kpi-card"><h3>Transactions</h3><p class="kpi-value" id="income-summary-count">--</p></div>
+            </div>
+        </div>
+        <ul id="income-history-list" style="padding: 0;"></ul>
+    </main>
+
+    <div id="modal-overlay"></div>
+    <div id="daily-log-modal" class="modal">
+        <div class="modal-header">
+            <h2 id="modal-title">Add Daily Log</h2>
+            <button class="close-btn" id="modal-close-btn">&times;</button>
+        </div>
+
+        <div class="modal-body" id="modal-body-layers">
+            <label for="log-date-layers">Date</label><input type="date" id="log-date-layers">
+            <label>Bird Mortality (today)</label>
+            <div class="mortality-calc"><div class="mortality-calc-row"><span class="mortality-start-total">--</span><span>-</span><input type="number" class="log-mortality" placeholder="0"><span>=</span><span class="mortality-new-total">--</span></div><div style="font-size: 0.8rem; display: flex; justify-content: space-around; width: 100%; margin-top: 4px;"><span>(Start)</span><span>(Lost)</span><span>(New Total)</span></div></div>
+            <label>Eggs Collected</label>
+            <div id="modal-egg-inputs"></div>
+            <label for="log-feed-layers">Feed Consumed (kg)</label><input type="number" id="log-feed-layers" placeholder="0">
+            <label for="log-misc-cost-layers">Other Costs (₦)</label><input type="number" id="log-misc-cost-layers" placeholder="0">
+        </div>
+
+        <div class="modal-body" id="modal-body-broilers" style="display: none;">
+            <label for="log-date-broilers">Date</label><input type="date" id="log-date-broilers">
+            <label>Bird Mortality (today)</label>
+             <div class="mortality-calc"><div class="mortality-calc-row"><span class="mortality-start-total">--</span><span>-</span><input type="number" class="log-mortality" placeholder="0"><span>=</span><span class="mortality-new-total">--</span></div><div style="font-size: 0.8rem; display: flex; justify-content: space-around; width: 100%; margin-top: 4px;"><span>(Start)</span><span>(Lost)</span><span>(New Total)</span></div></div>
+            <label for="log-avg-weight">Average Bird Weight (grams)</label><input type="number" id="log-avg-weight" placeholder="0">
+            <label for="log-feed-type">Feed Type / Brand Used Today</label><input type="text" id="log-feed-type" placeholder="e.g., Starter Crumbles">
+            <label for="log-feed-broilers">Feed Consumed (kg)</label><input type="number" id="log-feed-broilers" placeholder="0">
+            <label for="log-misc-cost-broilers">Other Costs (₦)</label><input type="number" id="log-misc-cost-broilers" placeholder="0">
+        </div>
+
+        <div class="modal-body" id="modal-body-fish" style="display: none;">
+            <label for="log-date-fish">Date</label><input type="date" id="log-date-fish">
+            <label>Fish Mortality (today)</label>
+            <div class="mortality-calc"><div class="mortality-calc-row"><span class="mortality-start-total">--</span><span>-</span><input type="number" class="log-mortality" placeholder="0"><span>=</span><span class="mortality-new-total">--</span></div><div style="font-size: 0.8rem; display: flex; justify-content: space-around; width: 100%; margin-top: 4px;"><span>(Start)</span><span>(Lost)</span><span>(New Total)</span></div></div>
+            <label for="log-avg-weight-fish">Average Weight Sample (grams)</label><input type="number" id="log-avg-weight-fish" placeholder="0">
+            <label for="log-feed-fish">Feed Consumed (kg)</label><input type="number" id="log-feed-fish" placeholder="0">
+            <h3>Water Quality</h3>
+            <div class="input-group">
+                <div><label for="log-water-ph">pH Level</label><input type="number" id="log-water-ph" placeholder="7.0"></div>
+                <div><label for="log-water-temp">Temp (°C)</label><input type="number" id="log-water-temp" placeholder="25"></div>
+            </div>
+            <label for="log-misc-cost-fish">Other Costs (₦)</label><input type="number" id="log-misc-cost-fish" placeholder="0">
+        </div>
+
+        <div class="modal-footer">
+            <button class="btn secondary-btn" id="modal-cancel-btn">Cancel</button>
+            <button class="btn primary-btn" id="modal-save-btn">Save Log</button>
+        </div>
+    </div>
+    
+    <div id="income-log-modal" class="modal">
+        <div class="modal-header">
+            <h2 id="income-modal-title">Add Income Entry</h2>
+            <button class="close-btn" id="income-modal-close-btn">&times;</button>
+        </div>
+        <div class="modal-body">
+            <label for="income-date">Date of Sale</label>
+            <input type="date" id="income-date">
+
+            <label for="income-category-layers">Income Source</label>
+            <select id="income-category-layers"><option value="Egg Sales">Egg Sales</option><option value="Sale of Culled Birds">Sale of Culled Birds</option><option value="Manure Sales">Manure Sales</option><option value="Other Income">Other Income</option></select>
+            <select id="income-category-broilers" style="display: none;"><option value="Sale of Live Birds">Sale of Live Birds</option><option value="Sale of Processed Birds">Sale of Processed Birds</option><option value="Manure Sales">Manure Sales</option><option value="Other Income">Other Income</option></select>
+            <select id="income-category-fish" style="display: none;"><option value="Sale of Market-Size Fish">Sale of Market-Size Fish</option><option value="Sale of Fingerlings/Juveniles">Sale of Fingerlings/Juveniles</option><option value="Other Income">Other Income</option></select>
+            
+            <label for="income-quantity" id="income-quantity-label">Quantity (Crates)</label>
+            <input type="number" id="income-quantity" placeholder="0">
+            
+            <div id="income-weight-container" style="display: none;"><label for="income-weight">Total Weight (kg)</label><input type="number" id="income-weight" placeholder="0"></div>
+
+            <label for="income-amount">Total Amount Received (₦)</label>
+            <input type="number" id="income-amount" placeholder="0">
+            
+            <label for="income-notes">Notes (Optional)</label>
+            <textarea id="income-notes" rows="3" placeholder="e.g., Sold to Mr. Ade at the market"></textarea>
+        </div>
+        <div class="modal-footer">
+            <button class="btn secondary-btn" id="income-modal-cancel-btn">Cancel</button>
+            <button class="btn primary-btn" id="income-modal-save-btn">Save Entry</button>
+        </div>
+    </div>
+
+
+</body>
+</html>
