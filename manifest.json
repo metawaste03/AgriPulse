@@ -3,7 +3,7 @@
   "name": "AgriPulse: Smart Farm Management",
   "icons": [
     {
-      "src": "icon.svg",
+      "src": "/icon.svg",
       "type": "image/svg+xml",
       "sizes": "512x512"
     }
