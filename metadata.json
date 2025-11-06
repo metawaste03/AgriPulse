@@ -1,5 +1,5 @@
 {
-  "name": "Copy:AgriPulse",
+  "name": "AgriPulse",
   "description": "A smart poultry farm management application that tracks daily logs, manages inventory, and provides AI-powered advice from Gemini to optimize profitability and flock health.",
   "requestFramePermissions": []
 }
