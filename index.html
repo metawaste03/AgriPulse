@@ -305,14 +305,27 @@
         <h1>Feed Inventory</h1>
         <p>Log your new feed purchases here. This inventory is shared across all farm types.</p>
         <a id="nav-to-dash-from-feed">&larr; Back to Dashboard</a>
+        
+        <div class="kpi-grid" style="grid-template-columns: 1fr;">
+            <div class="kpi-card">
+                <h3>Current Stock</h3>
+                <p class="kpi-value" id="feed-kpi-stock">-- kg</p>
+            </div>
+        </div>
+
         <div class="form-section">
-            <h3>Add Feed Purchase</h3>
+            <h3>Log New Purchase</h3>
             <label for="feed-date">Date of Purchase</label><input type="date" id="feed-date">
             <label for="feed-bags">Number of Bags</label><input type="number" id="feed-bags" placeholder="0">
             <label for="feed-weight">Total Weight (kg)</label><input type="number" id="feed-weight" placeholder="0">
             <label for="feed-cost">Total Cost (₦)</label><input type="number" id="feed-cost" placeholder="0">
+            <button class="btn primary-btn" id="save-feed-btn" style="margin-top: 1.5rem;">Save Purchase</button>
         </div>
-        <button class="btn primary-btn" id="save-feed-btn" style="margin-top: 1rem;">Save Purchase</button>
+        
+        <div class="form-section">
+            <h3>Purchase History</h3>
+            <ul id="feed-purchase-history-list" style="padding: 0; list-style: none;"></ul>
+        </div>
     </main>
     
     <main id="page-history" class="page">

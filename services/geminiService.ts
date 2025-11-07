@@ -1,94 +1,110 @@
-import { GoogleGenAI, Type } from "@google/genai";
 import { AdviceMessage } from "../types";
 
-const getLayerAIAdvice = async (farmData: any): Promise<AdviceMessage[]> => {
-  if (!process.env.API_KEY) return [{ type: 'warning', message: 'Gemini API key not configured. Smart Advisor is offline.' }];
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const prompt = `You are an expert poultry farm advisor for an app called 'AgriPulse'. Analyze the following LAYER farm data and provide a JSON array of advice objects. Each object must have 'type' ('critical', 'warning', or 'positive') and 'message' (a concise, helpful string for the farmer). Respond with only the JSON.
+const getLayerAIAdvice = (farmData: any): AdviceMessage[] => {
+    const advice: AdviceMessage[] = [];
 
-    Farm Data:
-    - Initial Flock Size: ${farmData.initialBirds}; Current Flock Size: ${farmData.currentBirds}; Total Mortality: ${farmData.initialBirds - farmData.currentBirds}
-    - Flock Age (days): ${farmData.flockAge}
-    - Feed Alert Threshold: ${farmData.feedAlertValue} ${farmData.feedAlertType}
-    - Feed in Stock: ${farmData.feedInStock.toFixed(1)} kg (${farmData.bagsInStock.toFixed(1)} bags)
-    - Feed Stock Percentage: ${farmData.feedStockPercentage.toFixed(1)}%
-    Today's Log (${farmData.todayLog?.date || 'No log for today'}):
-    - Laying Capacity: ${farmData.layingCapacity.toFixed(1)}%
-    - Mortality Today: ${farmData.todayLog?.mortality || 0} birds (${farmData.mortalityRate.toFixed(2)}% of flock)
-    - Feed Consumed: ${farmData.todayLog?.feedUsed || 0} kg
-    - Feed Conversion Ratio (kg feed/crate): ${farmData.fcr.toFixed(2)}
-    - Total Income Today: ₦${farmData.incomeToday.toFixed(0)}
-    - Profit/Loss Today: ₦${farmData.profit.toFixed(0)}
-    - 7-day avg laying capacity: ${farmData.avgLayingCapacity7d.toFixed(1)}%
-    - 7-day total mortality: ${farmData.totalMortality7d}
+    // Critical Checks
+    if (farmData.mortalityRate > 0.5) {
+        advice.push({ type: 'critical', message: `Critical mortality rate of ${farmData.mortalityRate.toFixed(1)}% today. Investigate flock health immediately.` });
+    }
+    if (farmData.profit < -5000) {
+        advice.push({ type: 'critical', message: `Significant financial loss of ₦${Math.abs(farmData.profit).toLocaleString()} today. Review costs and sales data.` });
+    }
 
-    Generate advisory messages. Prioritize critical issues like high mortality (>0.5% daily), low feed, major financial loss, or sudden drops in laying capacity.`;
-  try {
-    const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash", contents: prompt,
-        config: { responseMimeType: "application/json", responseSchema: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { type: { type: Type.STRING }, message: { type: Type.STRING } }, required: ["type", "message"] } } }
-    });
-    return JSON.parse(response.text.trim());
-  } catch (error) { console.error("Error calling Gemini API:", error); return [{ type: 'critical', message: 'Could not connect to the AI Smart Advisor.' }]; }
+    // Warning Checks
+    if (farmData.feedAlertType === 'percentage' && farmData.feedStockPercentage < farmData.feedAlertValue) {
+        advice.push({ type: 'warning', message: `Feed stock is low at ${farmData.feedStockPercentage.toFixed(1)}%, below your ${farmData.feedAlertValue}% threshold. Plan to restock soon.` });
+    } else if (farmData.feedAlertType === 'bags' && farmData.bagsInStock < farmData.feedAlertValue) {
+        advice.push({ type: 'warning', message: `Feed stock is low at ${farmData.bagsInStock.toFixed(1)} bags, below your ${farmData.feedAlertValue} bag threshold. Plan to restock.` });
+    }
+
+    if (farmData.layingCapacity > 0 && farmData.avgLayingCapacity7d > 0 && farmData.layingCapacity < (farmData.avgLayingCapacity7d * 0.9)) {
+        advice.push({ type: 'warning', message: `Today's laying capacity (${farmData.layingCapacity.toFixed(1)}%) is notably lower than the 7-day average (${farmData.avgLayingCapacity7d.toFixed(1)}%). Monitor for potential issues.` });
+    }
+    
+    if (farmData.fcr > 3.0 && farmData.fcr !== Infinity) {
+        advice.push({ type: 'warning', message: `Feed Conversion Ratio (${farmData.fcr.toFixed(2)}) is high. Ensure proper feeding and check for feed wastage.` });
+    }
+
+    // Positive Checks
+    if (farmData.profit > 10000) {
+        advice.push({ type: 'positive', message: `Excellent profit of ₦${farmData.profit.toLocaleString()} today! Your management is paying off.` });
+    }
+    if (farmData.layingCapacity > 85) {
+        advice.push({ type: 'positive', message: `Laying capacity is strong at ${farmData.layingCapacity.toFixed(1)}%. Great job!` });
+    }
+    
+    return advice;
 };
 
-const getBroilerAIAdvice = async (farmData: any): Promise<AdviceMessage[]> => {
-    if (!process.env.API_KEY) return [{ type: 'warning', message: 'Gemini API key not configured. Smart Advisor is offline.' }];
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    const prompt = `You are an expert poultry farm advisor for an app called 'AgriPulse'. Analyze the following BROILER farm data and provide a JSON array of advice objects. Each object must have 'type' ('critical', 'warning', or 'positive') and 'message' (a concise, helpful string for the farmer). Respond with only the JSON.
+const getBroilerAIAdvice = (farmData: any): AdviceMessage[] => {
+    const advice: AdviceMessage[] = [];
 
-    Farm Data:
-    - Initial Flock Size: ${farmData.initialBirds}; Current Flock Size: ${farmData.currentBirds}; Total Mortality: ${farmData.initialBirds - farmData.currentBirds}
-    - Flock Age (days): ${farmData.flockAge}
-    - Feed Alert Threshold: ${farmData.feedAlertValue} ${farmData.feedAlertType}
-    - Feed in Stock: ${farmData.feedInStock.toFixed(1)} kg (${farmData.bagsInStock.toFixed(1)} bags)
-    Today's Log (${farmData.todayLog?.date || 'No log for today'}):
-    - Average Weight: ${farmData.todayLog?.avgWeight || 0} g
-    - Average Daily Gain (ADG): ${farmData.adg.toFixed(1)} g/day
-    - Mortality Today: ${farmData.todayLog?.mortality || 0} birds (${farmData.mortalityRate.toFixed(2)}% of flock)
-    - Feed Consumed: ${farmData.todayLog?.feedUsed || 0} kg
-    - Feed Conversion Ratio (FCR): ${farmData.fcr.toFixed(2)}
-    - 7-day total mortality: ${farmData.totalMortality7d}
-    - Total Income Today: ₦${farmData.incomeToday.toFixed(0)}
+    // Critical Checks
+    if (farmData.mortalityRate > 0.5) {
+        advice.push({ type: 'critical', message: `Critical mortality rate of ${farmData.mortalityRate.toFixed(1)}% today. Check for signs of disease or stress.` });
+    }
+    if (farmData.adg < 0) {
+        advice.push({ type: 'critical', message: `Average Daily Gain is negative (${farmData.adg.toFixed(1)} g/day). This requires immediate attention to feed, water, and flock health.` });
+    }
 
-    Generate advisory messages. Prioritize critical issues like high mortality (>0.5% daily), negative ADG, or very high FCR (>2.5). A good FCR is below 1.8.`;
-    try {
-      const response = await ai.models.generateContent({
-          model: "gememini-2.5-flash", contents: prompt,
-          config: { responseMimeType: "application/json", responseSchema: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { type: { type: Type.STRING }, message: { type: Type.STRING } }, required: ["type", "message"] } } }
-      });
-      return JSON.parse(response.text.trim());
-    } catch (error) { console.error("Error calling Broiler Gemini API:", error); return [{ type: 'critical', message: 'Could not connect to the AI Smart Advisor.' }]; }
+    // Warning Checks
+    if (farmData.fcr > 2.5 && farmData.fcr !== Infinity) {
+        advice.push({ type: 'warning', message: `FCR is very high at ${farmData.fcr.toFixed(2)}. Review your feeding program and check for wastage. Aim for below 1.8.` });
+    } else if (farmData.fcr > 1.8 && farmData.fcr !== Infinity) {
+        advice.push({ type: 'warning', message: `FCR is a bit high at ${farmData.fcr.toFixed(2)}. Aim for a value below 1.8 for better efficiency.` });
+    }
+    
+    if (farmData.adg > 0 && farmData.adg < 30) {
+        advice.push({ type: 'warning', message: `Average Daily Gain (${farmData.adg.toFixed(1)} g/day) seems low. Ensure constant access to high-quality feed and water.` });
+    }
+
+    // Positive Checks
+    if (farmData.fcr < 1.6 && farmData.fcr > 0) {
+        advice.push({ type: 'positive', message: `Excellent FCR of ${farmData.fcr.toFixed(2)}! Your feeding strategy is very efficient.` });
+    }
+    if (farmData.adg > 60) {
+        advice.push({ type: 'positive', message: `Great average daily gain of ${farmData.adg.toFixed(1)} g/day! The flock is growing well.` });
+    }
+
+    return advice;
 };
 
-const getFishAIAdvice = async (farmData: any): Promise<AdviceMessage[]> => {
-    if (!process.env.API_KEY) return [{ type: 'warning', message: 'Gemini API key not configured. Smart Advisor is offline.' }];
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    const prompt = `You are an expert aquaculture advisor for an app called 'AgriPulse'. Analyze the following FISH farm data (likely for Catfish or Tilapia in Nigeria) and provide a JSON array of advice objects. Each object must have 'type' ('critical', 'warning', or 'positive') and 'message' (a concise, helpful string for the farmer). Respond with only the JSON.
+const getFishAIAdvice = (farmData: any): AdviceMessage[] => {
+    const advice: AdviceMessage[] = [];
+    const { todayLog } = farmData;
 
-    Farm Data:
-    - Fish Type: ${farmData.fishType}
-    - Initial Stock: ${farmData.initialQuantity} fish at ${farmData.initialAvgWeight}g each.
-    - Current Stock: ${farmData.currentQuantity} fish.
-    - Days Since Stocking: ${farmData.daysSinceStocking}
-    - Total Biomass: ${farmData.totalBiomass.toFixed(2)} kg
-    Today's Log (${farmData.todayLog?.date || 'No log for today'}):
-    - Mortality Today: ${farmData.todayLog?.mortality || 0} fish (${farmData.mortalityRate.toFixed(2)}% of stock)
-    - Feed Consumed: ${farmData.todayLog?.feedUsed || 0} kg
-    - Feed Conversion Ratio (FCR): ${farmData.fcr.toFixed(2)}
-    - Avg Weight Sample: ${farmData.latestAvgWeight} g
-    - Growth Rate: ${farmData.growthRate.toFixed(1)} g/day
-    - Water pH: ${farmData.todayLog?.waterPH || 'N/A'}
-    - Water Temperature: ${farmData.todayLog?.waterTemp || 'N/A'} °C
+    // Critical Checks
+    if (farmData.mortalityRate > 1) {
+        advice.push({ type: 'critical', message: `Critical mortality rate of ${farmData.mortalityRate.toFixed(1)}% today. Check water quality and for signs of disease.` });
+    }
+    if (todayLog?.waterPH && (todayLog.waterPH < 6.0 || todayLog.waterPH > 9.0)) {
+        advice.push({ type: 'critical', message: `Water pH is at a critical level (${todayLog.waterPH}). This can be toxic to fish. Take corrective action.` });
+    }
 
-    Generate advisory messages. Ideal pH is 6.5-8.5. Ideal temp is 24-30°C. FCR should be low (ideally < 1.5). Prioritize critical issues like high mortality (>1% daily), poor water quality, high FCR, or stagnant growth.`;
-    try {
-      const response = await ai.models.generateContent({
-          model: "gemini-2.5-flash", contents: prompt,
-          config: { responseMimeType: "application/json", responseSchema: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { type: { type: Type.STRING }, message: { type: Type.STRING } }, required: ["type", "message"] } } }
-      });
-      return JSON.parse(response.text.trim());
-    } catch (error) { console.error("Error calling Fish Gemini API:", error); return [{ type: 'critical', message: 'Could not connect to the AI Smart Advisor.' }]; }
+    // Warning Checks
+    if (farmData.fcr > 1.8 && farmData.fcr !== Infinity) {
+        advice.push({ type: 'warning', message: `FCR is high at ${farmData.fcr.toFixed(2)}. Review feeding amounts and feed quality. Ideal FCR is below 1.5.` });
+    }
+    if (farmData.growthRate <= 0 && farmData.daysSinceStocking > 7) {
+        advice.push({ type: 'warning', message: `Fish growth has stagnated. Check feeding rates, water quality, and stocking density.` });
+    }
+    if (todayLog?.waterPH && ((todayLog.waterPH < 6.5) || (todayLog.waterPH > 8.5))) {
+        advice.push({ type: 'warning', message: `Water pH of ${todayLog.waterPH} is outside the ideal range of 6.5-8.5. Monitor closely.` });
+    }
+    if (todayLog?.waterTemp && (todayLog.waterTemp < 22 || todayLog.waterTemp > 32)) {
+        advice.push({ type: 'warning', message: `Water temperature (${todayLog.waterTemp}°C) is outside the optimal range (24-30°C). This can stress the fish.` });
+    }
+    
+    // Positive Checks
+    if (farmData.fcr < 1.5 && farmData.fcr > 0) {
+        advice.push({ type: 'positive', message: `Excellent FCR of ${farmData.fcr.toFixed(2)}. Your feeding management is effective.` });
+    }
+    if (farmData.growthRate > 3) {
+         advice.push({ type: 'positive', message: `Good growth rate of ${farmData.growthRate.toFixed(1)} g/day.` });
+    }
+
+    return advice;
 };
 
 export { getLayerAIAdvice, getBroilerAIAdvice, getFishAIAdvice };

@@ -11,15 +11,8 @@ class App {
 
     init() {
         this.cacheDOMElements();
-        this.currentFarmType = (localStorage.getItem('currentFarmType') as FarmType) || 'layers';
-        this.switchFarmTypeUI();
         this.setupEventListeners();
-
-        if (localStorage.getItem('settingsSaved') === 'true') {
-            this.showPage('page-dashboard');
-        } else {
-            this.showPage('page-signin');
-        }
+        this.loadInitialPage();
     }
     
     private cacheDOMElements() {
@@ -32,19 +25,34 @@ class App {
             'btn-add-income', 'income-modal-close-btn', 'income-modal-cancel-btn', 'nav-to-dash-from-settings',
             'nav-to-dash-from-feed', 'nav-to-dash-from-history', 'nav-to-dash-from-income', 'btn-manage-feed',
             'btn-log-history', 'btn-income-ledger', 'income-filter-today', 'income-filter-week', 'income-filter-month',
-            'income-filter-all', 'save-feed-btn', 'alert-type-percent', 'alert-type-bags', 'alert-input-percent', 'alert-input-bags'
+            'income-filter-all', 'save-feed-btn', 'alert-type-percent', 'alert-type-bags', 'alert-input-percent', 'alert-input-bags',
+            'feed-kpi-stock', 'feed-purchase-history-list'
         ];
         ids.forEach(id => this.elements[id] = document.getElementById(id));
     }
+    
+    private loadInitialPage() {
+        this.currentFarmType = (localStorage.getItem('currentFarmType') as FarmType) || 'layers';
+        this.switchFarmTypeUI();
+        
+        if (localStorage.getItem('settingsSaved') === 'true') {
+            this.showPage('page-dashboard');
+        } else {
+            this.showPage('page-signin');
+        }
+    }
 
     private setupEventListeners() {
+        this.elements['signin-btn']?.addEventListener('click', () => {
+            this.showPage('page-settings');
+        });
+
         // Farm Type Switcher
         this.elements['farm-type-layers']?.addEventListener('click', () => this.switchFarmType('layers'));
         this.elements['farm-type-broilers']?.addEventListener('click', () => this.switchFarmType('broilers'));
         this.elements['farm-type-fish']?.addEventListener('click', () => this.switchFarmType('fish'));
         
         // Navigation
-        this.elements['signin-btn']?.addEventListener('click', () => this.showPage('page-settings'));
         this.elements['nav-to-settings-from-dash']?.addEventListener('click', () => this.showPage('page-settings'));
         this.elements['btn-manage-feed']?.addEventListener('click', () => this.showPage('page-feed'));
         this.elements['btn-log-history']?.addEventListener('click', () => this.showPage('page-history'));
@@ -84,12 +92,27 @@ class App {
 
         // Feed Page
         this.elements['save-feed-btn']?.addEventListener('click', () => {
-            const purchase = { id: Date.now(), date: (document.getElementById('feed-date') as HTMLInputElement).value, bags: parseFloat((document.getElementById('feed-bags') as HTMLInputElement).value || '0'), weight: parseFloat((document.getElementById('feed-weight') as HTMLInputElement).value || '0'), cost: parseFloat((document.getElementById('feed-cost') as HTMLInputElement).value || '0'), };
+            const dateEl = document.getElementById('feed-date') as HTMLInputElement;
+            const bagsEl = document.getElementById('feed-bags') as HTMLInputElement;
+            const weightEl = document.getElementById('feed-weight') as HTMLInputElement;
+            const costEl = document.getElementById('feed-cost') as HTMLInputElement;
+
+            if (!dateEl.value || !weightEl.value || !costEl.value) {
+                alert('Please fill in at least Date, Weight, and Cost.');
+                return;
+            }
+
+            const purchase = { id: Date.now(), date: dateEl.value, bags: parseFloat(bagsEl.value || '0'), weight: parseFloat(weightEl.value || '0'), cost: parseFloat(costEl.value || '0'), };
             const purchases = JSON.parse(localStorage.getItem('shared_feedPurchases') || '[]');
             purchases.push(purchase);
             localStorage.setItem('shared_feedPurchases', JSON.stringify(purchases));
             alert('Feed purchase saved!');
-            this.showPage('page-dashboard');
+            
+            bagsEl.value = '';
+            weightEl.value = '';
+            costEl.value = '';
+
+            this.loadFeedPage();
         });
     }
 
@@ -158,7 +181,7 @@ class App {
         if (pageElement) {
             if (pageId === 'page-settings') this.loadSettings();
             else if (pageId === 'page-dashboard') this.updateDashboard();
-            else if (pageId === 'page-feed') (document.getElementById('feed-date') as HTMLInputElement).value = this.getTodayDate();
+            else if (pageId === 'page-feed') this.loadFeedPage();
             else if (pageId === 'page-history') this.loadLogHistory();
             else if (pageId === 'page-income') this.loadIncomeLedger();
             pageElement.classList.add('active');
@@ -486,6 +509,70 @@ class App {
         });
     }
 
+    // --- Feed Logic ---
+    private getFeedStock() {
+        const feedPurchases = JSON.parse(localStorage.getItem('shared_feedPurchases') || '[]');
+        const allLogsLayers = JSON.parse(localStorage.getItem('layers_dailyLogs') || '[]');
+        const allLogsBroilers = JSON.parse(localStorage.getItem('broilers_dailyLogs') || '[]');
+        const allLogsFish = JSON.parse(localStorage.getItem('fish_dailyLogs') || '[]');
+        
+        const totalFeedBought = feedPurchases.reduce((sum: number, item: any) => sum + Number(item.weight || 0), 0);
+        const totalFeedUsed = [...allLogsLayers, ...allLogsBroilers, ...allLogsFish].reduce((sum: number, item: any) => sum + Number(item.feedUsed || 0), 0);
+        const feedInStock = totalFeedBought - totalFeedUsed;
+        return { feedInStock, totalFeedBought };
+    }
+
+    private loadFeedPage() {
+        (document.getElementById('feed-date') as HTMLInputElement).value = this.getTodayDate();
+
+        const { feedInStock } = this.getFeedStock();
+        (this.elements['feed-kpi-stock'] as HTMLElement).textContent = `${feedInStock.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1})} kg`;
+
+        const feedPurchases = JSON.parse(localStorage.getItem('shared_feedPurchases') || '[]');
+        const historyList = this.elements['feed-purchase-history-list'] as HTMLUListElement;
+        historyList.innerHTML = '';
+        
+        if (feedPurchases.length === 0) {
+            historyList.innerHTML = '<p>No feed purchases logged yet.</p>';
+            return;
+        }
+
+        feedPurchases.sort((a: any, b: any) => (this.parseDateString(b.date)?.getTime() || 0) - (this.parseDateString(a.date)?.getTime() || 0));
+
+        feedPurchases.forEach((purchase: any) => {
+            const card = document.createElement('li');
+            card.className = 'log-card';
+            card.innerHTML = `
+                <div class="log-card-header">
+                    <h3>Purchase Date: ${this.formatDate(purchase.date)}</h3>
+                    <button class="btn secondary-btn" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;" data-id="${purchase.id}">Delete</button>
+                </div>
+                <div class="log-card-body">
+                    <p>Weight: <span>${Number(purchase.weight || 0).toLocaleString()} kg</span></p>
+                    <p>Bags: <span>${Number(purchase.bags || 0).toLocaleString()}</span></p>
+                    <p>Total Cost: <span>₦${Number(purchase.cost || 0).toLocaleString()}</span></p>
+                </div>
+            `;
+            historyList.appendChild(card);
+        });
+
+        historyList.querySelectorAll('button[data-id]').forEach(button => {
+            button.addEventListener('click', (e) => {
+                const id = (e.currentTarget as HTMLElement).dataset.id;
+                if (id && confirm('Are you sure you want to delete this purchase entry?')) {
+                    this.deleteFeedPurchase(parseInt(id, 10));
+                }
+            });
+        });
+    }
+
+    private deleteFeedPurchase(id: number) {
+        let purchases = JSON.parse(localStorage.getItem('shared_feedPurchases') || '[]');
+        purchases = purchases.filter((p: any) => p.id !== id);
+        localStorage.setItem('shared_feedPurchases', JSON.stringify(purchases));
+        this.loadFeedPage();
+    }
+
     // --- Dashboard Logic ---
     private updateFlockAgeKPI(settings: any): number {
         const flockAgeCard = document.getElementById(`kpi-card-flock-age-${this.currentFarmType}`);
@@ -506,27 +593,25 @@ class App {
         return flockAge;
     }
     
-    private async updateDashboard() {
-        if (this.elements['ai-advisor-messages']) {
-            this.elements['ai-advisor-messages'].innerHTML = '<p>Loading AI advice...</p>';
-        }
-        if (this.currentFarmType === 'layers') await this.updateLayersDashboard();
-        else if (this.currentFarmType === 'broilers') await this.updateBroilersDashboard();
-        else await this.updateFishDashboard();
+    private updateDashboard() {
+        if (!this.elements['ai-advisor-messages']) return;
+        this.elements['ai-advisor-messages'].innerHTML = '<p>Loading smart advice...</p>';
+
+        if (this.currentFarmType === 'layers') this.updateLayersDashboard();
+        else if (this.currentFarmType === 'broilers') this.updateBroilersDashboard();
+        else this.updateFishDashboard();
     }
 
-    private async updateLayersDashboard() {
+    private updateLayersDashboard() {
         const settings = this.getSettings();
         const flockAge = this.updateFlockAgeKPI(settings);
         const eggPrices = this.getData('eggPrices');
         const dailyLogs = this.getData('dailyLogs');
-        const feedPurchases = JSON.parse(localStorage.getItem('shared_feedPurchases') || '[]');
         const incomeEntries = this.getData('incomeEntries');
         const todayLog = dailyLogs.find((log: any) => log.date === this.getTodayDate()) || {};
 
-        const totalFeedBought = feedPurchases.reduce((sum: number, item: any) => sum + Number(item.weight || 0), 0);
-        const totalFeedUsed = dailyLogs.reduce((sum: number, item: any) => sum + Number(item.feedUsed || 0), 0);
-        const feedInStock = totalFeedBought - totalFeedUsed;
+        const { feedInStock, totalFeedBought } = this.getFeedStock();
+        const feedPurchases = JSON.parse(localStorage.getItem('shared_feedPurchases') || '[]');
         const avgFeedCostPerKg = totalFeedBought > 0 ? feedPurchases.reduce((s:number, i:any) => s + Number(i.cost||0), 0) / totalFeedBought : 0;
         
         let eggSaleRevenue = 0;
@@ -556,22 +641,19 @@ class App {
         const avgLayingCapacity7d = last7DaysLogs.length > 0 ? totalLayingCapacitySum / last7DaysLogs.length : layingCapacity;
         
         const farmData = { initialBirds: settings.initialStock, currentBirds: settings.currentStock, flockAge, ...settings, feedInStock, bagsInStock: feedInStock / 25, feedStockPercentage: totalFeedBought > 0 ? (feedInStock / totalFeedBought) * 100 : 0, todayLog, layingCapacity, mortalityRate: settings.currentStock > 0 && todayLog.mortality ? (todayLog.mortality / settings.currentStock) * 100 : 0, fcr, incomeToday, profit, avgLayingCapacity7d, totalMortality7d, };
-        const adviceMessages = await geminiService.getLayerAIAdvice(farmData);
+        const adviceMessages = geminiService.getLayerAIAdvice(farmData);
         this.displayAdvice(adviceMessages);
     }
     
-    private async updateBroilersDashboard() {
+    private updateBroilersDashboard() {
         const settings = this.getSettings();
         const flockAge = this.updateFlockAgeKPI(settings);
         const dailyLogs = this.getData('dailyLogs');
-        const feedPurchases = JSON.parse(localStorage.getItem('shared_feedPurchases') || '[]');
         const incomeEntries = this.getData('incomeEntries');
         const todayLog = dailyLogs.find((log: any) => log.date === this.getTodayDate()) || {};
         const yesterdayLog = dailyLogs.find((log: any) => log.date === new Date(new Date().setDate(new Date().getDate() - 1)).toISOString().split('T')[0]) || {};
 
-        const totalFeedBought = feedPurchases.reduce((sum: number, item: any) => sum + Number(item.weight || 0), 0);
-        const totalFeedUsed = dailyLogs.reduce((sum: number, item: any) => sum + Number(item.feedUsed || 0), 0);
-        const feedInStock = totalFeedBought - totalFeedUsed;
+        const { feedInStock } = this.getFeedStock();
         
         const todayWeight = Number(todayLog.avgWeight || 0);
         const yesterdayWeight = Number(yesterdayLog.avgWeight || 0);
@@ -593,11 +675,11 @@ class App {
         const incomeToday = incomeEntries.filter((i: any) => i.date === this.getTodayDate()).reduce((sum: number, i: any) => sum + Number(i.amount || 0), 0);
 
         const farmData = { initialBirds: settings.initialStock, currentBirds: settings.currentStock, flockAge, ...settings, feedInStock, bagsInStock: feedInStock / 25, todayLog, adg, mortalityRate, fcr, totalMortality7d, incomeToday, };
-        const adviceMessages = await geminiService.getBroilerAIAdvice(farmData);
+        const adviceMessages = geminiService.getBroilerAIAdvice(farmData);
         this.displayAdvice(adviceMessages);
     }
 
-    private async updateFishDashboard() {
+    private updateFishDashboard() {
         const settings = this.getSettings();
         const dailyLogs = this.getData('dailyLogs');
         const todayLog = dailyLogs.find((log: any) => log.date === this.getTodayDate()) || {};
@@ -633,7 +715,7 @@ class App {
         (document.getElementById('kpi-age-fish') as HTMLElement).textContent = `${daysSinceStocking.toLocaleString()} days`;
 
         const farmData = { ...settings, initialQuantity: settings.initialStock, currentQuantity: settings.currentStock, daysSinceStocking, totalBiomass, todayLog, mortalityRate, fcr, latestAvgWeight, growthRate };
-        const adviceMessages = await geminiService.getFishAIAdvice(farmData);
+        const adviceMessages = geminiService.getFishAIAdvice(farmData);
         this.displayAdvice(adviceMessages);
     }
 
@@ -650,7 +732,7 @@ class App {
                 container.appendChild(card);
             });
         } else {
-            container.innerHTML = '<div class="advisor-card positive" style="display:block;">All metrics look good! Keep up the great work.</div>';
+            container.innerHTML = '<div class="advisor-card positive" style.display:block;">All metrics look good! Keep up the great work.</div>';
         }
     }
 }
