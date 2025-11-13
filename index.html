@@ -136,9 +136,37 @@
         .slider.round:before { border-radius: 50%; }
         
         #income-summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 2rem; }
+
+        .view-switcher { display: flex; border-radius: 8px; overflow: hidden; margin: 2rem 0; border: 1px solid var(--brand-gold); }
+        .view-switcher button { flex: 1; padding: 0.75rem; border: none; background-color: transparent; color: var(--brand-gold); cursor: pointer; font-size: 1rem; font-weight: bold; transition: background-color 0.2s; }
+        .view-switcher button.active { background-color: var(--brand-gold); color: var(--brand-black); }
+        #insight-content { margin-top: 2rem; }
+        .insight-card { background-color: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; }
+        .insight-card-header { margin-bottom: 1rem; }
+        .insight-card-header h3 { color: #FFFFFF; margin: 0 0 0.25rem 0; font-size: 1.2rem; }
+        .insight-card-header p { margin: 0; font-size: 0.9rem; color: var(--brand-silver); }
+        .insight-card-header p .positive { color: var(--brand-positive); font-weight: bold; }
+        .insight-card-header p .negative { color: var(--brand-critical); font-weight: bold; }
+        .insight-chart-container { width: 100%; height: 200px; }
+        .insight-chart-container svg { width: 100%; height: 100%; }
+        .chart-grid-line { stroke: rgba(255, 255, 255, 0.1); stroke-dasharray: 2, 2; }
+        .chart-axis-line { stroke: rgba(255, 255, 255, 0.3); }
+        .chart-line { stroke: var(--brand-gold); stroke-width: 2; fill: none; }
+        .chart-area { fill: url(#gold-gradient); }
+        .chart-bar { fill: var(--brand-silver); transition: fill 0.2s; }
+        .chart-bar:hover { fill: var(--brand-gold); }
+        .chart-label { fill: var(--brand-silver); font-size: 10px; text-anchor: middle; }
     </style>
 </head>
 <body>
+    <svg width="0" height="0" style="position:absolute">
+        <defs>
+            <linearGradient id="gold-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" style="stop-color:rgba(212, 175, 55, 0.4);stop-opacity:1" />
+            <stop offset="100%" style="stop-color:rgba(212, 175, 55, 0);stop-opacity:1" />
+            </linearGradient>
+        </defs>
+    </svg>
 
     <main id="page-signin" class="page active">
         <div style="text-align: center; padding: 2rem; background-color: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.2); border-radius: 12px; margin-top: 20vh;">
@@ -263,42 +291,60 @@
             </div>
             <a id="nav-to-settings-from-dash">⚙️ Settings</a>
         </div>
-
-        <div class="dashboard-actions">
-            <button class="btn primary-btn" id="btn-show-modal">Add / Edit Today's Log</button>
-            <button class="btn secondary-btn" id="btn-manage-feed">Manage Feed Inventory</button>
-            <button class="btn secondary-btn" id="btn-income-ledger">Income Ledger</button>
-            <button class="btn secondary-btn" id="btn-log-history">View Log History</button>
-        </div>
         
-        <div class="advisor-section">
-            <h3>Smart Advisor</h3>
-            <div id="ai-advisor-messages"><p>Loading AI advice...</p></div>
+        <div class="view-switcher">
+            <button id="view-dashboard-btn" class="active">Dashboard</button>
+            <button id="view-insight-btn">Insight</button>
         </div>
 
-        <div id="kpi-grid-layers" class="kpi-grid">
-            <div class="kpi-card"><h3>Laying Capacity</h3><p class="kpi-value" id="kpi-laying-capacity">--%</p></div>
-            <div class="kpi-card"><h3>Profit / Loss (Today)</h3><p class="kpi-value" id="kpi-profit">₦--</p></div>
-            <div class="kpi-card" id="kpi-card-flock-age-layers" style="display: none;"><h3>Flock Age</h3><p class="kpi-value" id="kpi-flock-age-layers">-- days</p></div>
-            <div class="kpi-card"><h3>Feed Conversion</h3><p class="kpi-value" id="kpi-fcr">--</p></div>
-            <div class="kpi-card"><h3>Feed in Stock</h3><p class="kpi-value" id="kpi-feed-stock">-- kg</p></div>
+        <div id="dashboard-content">
+            <div class="dashboard-actions">
+                <button class="btn primary-btn" id="btn-show-modal">Add / Edit Today's Log</button>
+                <button class="btn secondary-btn" id="btn-manage-feed">Manage Feed Inventory</button>
+                <button class="btn secondary-btn" id="btn-income-ledger">Income Ledger</button>
+                <button class="btn secondary-btn" id="btn-log-history">View Log History</button>
+            </div>
+            
+            <div class="advisor-section">
+                <h3>Smart Advisor</h3>
+                <div id="ai-advisor-messages"><p>Loading AI advice...</p></div>
+            </div>
+
+            <div id="kpi-grid-layers" class="kpi-grid">
+                <div class="kpi-card"><h3>Laying Capacity</h3><p class="kpi-value" id="kpi-laying-capacity">--%</p></div>
+                <div class="kpi-card"><h3>Profit / Loss (Today)</h3><p class="kpi-value" id="kpi-profit">₦--</p></div>
+                <div class="kpi-card" id="kpi-card-flock-age-layers" style="display: none;"><h3>Flock Age</h3><p class="kpi-value" id="kpi-flock-age-layers">-- days</p></div>
+                <div class="kpi-card"><h3>Feed Conversion</h3><p class="kpi-value" id="kpi-fcr">--</p></div>
+                <div class="kpi-card"><h3>Feed in Stock</h3><p class="kpi-value" id="kpi-feed-stock">-- kg</p></div>
+            </div>
+            
+            <div id="kpi-grid-broilers" class="kpi-grid" style="display: none;">
+                <div class="kpi-card"><h3>Avg. Weight</h3><p class="kpi-value" id="kpi-avg-weight">-- g</p></div>
+                <div class="kpi-card" id="kpi-card-flock-age-broilers" style="display: none;"><h3>Flock Age</h3><p class="kpi-value" id="kpi-flock-age-broilers">-- days</p></div>
+                <div class="kpi-card"><h3>FCR</h3><p class="kpi-value" id="kpi-fcr-broiler">--</p></div>
+                <div class="kpi-card"><h3>Mortality Rate</h3><p class="kpi-value" id="kpi-mortality-rate">--%</p></div>
+                <div class="kpi-card"><h3>Feed in Stock</h3><p class="kpi-value" id="kpi-feed-stock-broiler">-- kg</p></div>
+            </div>
+            
+            <div id="kpi-grid-fish" class="kpi-grid" style="display: none;">
+                <div class="kpi-card"><h3>Avg. Weight</h3><p class="kpi-value" id="kpi-avg-weight-fish">-- g</p></div>
+                <div class="kpi-card"><h3>Total Biomass</h3><p class="kpi-value" id="kpi-biomass-fish">-- kg</p></div>
+                <div class="kpi-card"><h3>FCR</h3><p class="kpi-value" id="kpi-fcr-fish">--</p></div>
+                <div class="kpi-card"><h3>Mortality Rate</h3><p class="kpi-value" id="kpi-mortality-rate-fish">--%</p></div>
+                <div class="kpi-card"><h3>Days Since Stocked</h3><p class="kpi-value" id="kpi-age-fish">-- days</p></div>
+            </div>
         </div>
         
-        <div id="kpi-grid-broilers" class="kpi-grid" style="display: none;">
-            <div class="kpi-card"><h3>Avg. Weight</h3><p class="kpi-value" id="kpi-avg-weight">-- g</p></div>
-            <div class="kpi-card" id="kpi-card-flock-age-broilers" style="display: none;"><h3>Flock Age</h3><p class="kpi-value" id="kpi-flock-age-broilers">-- days</p></div>
-            <div class="kpi-card"><h3>FCR</h3><p class="kpi-value" id="kpi-fcr-broiler">--</p></div>
-            <div class="kpi-card"><h3>Mortality Rate</h3><p class="kpi-value" id="kpi-mortality-rate">--%</p></div>
-            <div class="kpi-card"><h3>Feed in Stock</h3><p class="kpi-value" id="kpi-feed-stock-broiler">-- kg</p></div>
+        <div id="insight-content" style="display: none;">
+            <div class="filter-toggle" id="insight-time-filter">
+                <button data-range="7" class="active">7d</button>
+                <button data-range="30">30d</button>
+                <button data-range="90">90d</button>
+            </div>
+            <div id="insight-charts-container">
+            </div>
         </div>
-        
-        <div id="kpi-grid-fish" class="kpi-grid" style="display: none;">
-            <div class="kpi-card"><h3>Avg. Weight</h3><p class="kpi-value" id="kpi-avg-weight-fish">-- g</p></div>
-            <div class="kpi-card"><h3>Total Biomass</h3><p class="kpi-value" id="kpi-biomass-fish">-- kg</p></div>
-            <div class="kpi-card"><h3>FCR</h3><p class="kpi-value" id="kpi-fcr-fish">--</p></div>
-            <div class="kpi-card"><h3>Mortality Rate</h3><p class="kpi-value" id="kpi-mortality-rate-fish">--%</p></div>
-            <div class="kpi-card"><h3>Days Since Stocked</h3><p class="kpi-value" id="kpi-age-fish">-- days</p></div>
-        </div>
+
     </main>
     
     <main id="page-feed" class="page">

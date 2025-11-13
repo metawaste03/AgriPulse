@@ -26,7 +26,8 @@ class App {
             'nav-to-dash-from-feed', 'nav-to-dash-from-history', 'nav-to-dash-from-income', 'btn-manage-feed',
             'btn-log-history', 'btn-income-ledger', 'income-filter-today', 'income-filter-week', 'income-filter-month',
             'income-filter-all', 'save-feed-btn', 'alert-type-percent', 'alert-type-bags', 'alert-input-percent', 'alert-input-bags',
-            'feed-kpi-stock', 'feed-purchase-history-list'
+            'feed-kpi-stock', 'feed-purchase-history-list', 'view-dashboard-btn', 'view-insight-btn', 'dashboard-content',
+            'insight-content', 'insight-time-filter', 'insight-charts-container'
         ];
         ids.forEach(id => this.elements[id] = document.getElementById(id));
     }
@@ -114,6 +115,20 @@ class App {
 
             this.loadFeedPage();
         });
+
+        // Dashboard View Switcher
+        this.elements['view-dashboard-btn']?.addEventListener('click', () => this.switchDashboardView('dashboard'));
+        this.elements['view-insight-btn']?.addEventListener('click', () => this.switchDashboardView('insight'));
+
+        this.elements['insight-time-filter']?.addEventListener('click', (e) => {
+            const target = e.target as HTMLButtonElement;
+            if (target.tagName === 'BUTTON' && !target.classList.contains('active')) {
+                this.elements['insight-time-filter']?.querySelectorAll('button').forEach(btn => btn.classList.remove('active'));
+                target.classList.add('active');
+                const range = parseInt(target.dataset.range || '7', 10);
+                this.renderInsightPage(range);
+            }
+        });
     }
 
     // --- Helper Functions ---
@@ -148,6 +163,9 @@ class App {
         localStorage.setItem('currentFarmType', newType);
         this.switchFarmTypeUI();
         this.updateDashboard();
+        if (this.elements['insight-content']?.style.display === 'block') {
+            this.renderInsightPage();
+        }
         if (document.getElementById('page-settings')?.classList.contains('active')) {
             this.loadSettings();
         }
@@ -735,6 +753,174 @@ class App {
             container.innerHTML = '<div class="advisor-card positive" style.display:block;">All metrics look good! Keep up the great work.</div>';
         }
     }
+
+    // --- Insight Page Logic ---
+    private switchDashboardView(view: 'dashboard' | 'insight') {
+        const isDashboard = view === 'dashboard';
+        this.elements['dashboard-content']!.style.display = isDashboard ? 'block' : 'none';
+        this.elements['insight-content']!.style.display = isDashboard ? 'none' : 'block';
+
+        this.elements['view-dashboard-btn']?.classList.toggle('active', isDashboard);
+        this.elements['view-insight-btn']?.classList.toggle('active', !isDashboard);
+
+        if (!isDashboard) {
+            const activeFilter = this.elements['insight-time-filter']?.querySelector('button.active') as HTMLButtonElement;
+            const range = parseInt(activeFilter?.dataset.range || '7', 10);
+            this.renderInsightPage(range);
+        }
+    }
+
+    private renderInsightPage(range: number = 7) {
+        const container = this.elements['insight-charts-container'];
+        if (!container) return;
+        container.innerHTML = '<p>Loading insights...</p>';
+    
+        const allLogs = this.getData('dailyLogs');
+        const endDate = new Date();
+        const startDate = new Date();
+        startDate.setDate(endDate.getDate() - (range -1));
+        
+        const filteredLogs = allLogs.filter((log: any) => {
+            const logDate = this.parseDateString(log.date);
+            return logDate && logDate >= startDate && logDate <= endDate;
+        });
+    
+        if (filteredLogs.length < 2) {
+            container.innerHTML = '<div class="insight-card"><p>Not enough data for this period to generate insights. Please add more daily logs.</p></div>';
+            return;
+        }
+        container.innerHTML = '';
+    
+        if (this.currentFarmType === 'layers') this.renderLayersInsights(filteredLogs);
+        else if (this.currentFarmType === 'broilers') this.renderBroilersInsights(filteredLogs);
+        else if (this.currentFarmType === 'fish') this.renderFishInsights(filteredLogs);
+    }
+
+    private createInsightCardHTML(title: string, summary: string, chartHTML: string): string {
+        return `
+            <div class="insight-card">
+                <div class="insight-card-header">
+                    <h3>${title}</h3>
+                    <p>${summary}</p>
+                </div>
+                <div class="insight-chart-container">
+                    ${chartHTML}
+                </div>
+            </div>
+        `;
+    }
+
+    private getAverageFeedCost(): number {
+        const feedPurchases = JSON.parse(localStorage.getItem('shared_feedPurchases') || '[]');
+        const totalCost = feedPurchases.reduce((sum: number, p: any) => sum + (p.cost || 0), 0);
+        const totalWeight = feedPurchases.reduce((sum: number, p: any) => sum + (p.weight || 0), 0);
+        return totalWeight > 0 ? totalCost / totalWeight : 0;
+    }
+
+    private renderLayersInsights(logs: any[]) {
+        const container = this.elements['insight-charts-container']!;
+        const avgFeedCost = this.getAverageFeedCost();
+
+        const feedCostData = logs.map(log => ({ label: this.formatDate(log.date).slice(0, 5), value: (log.feedUsed || 0) * avgFeedCost }));
+        const firstFeedCost = feedCostData[0].value;
+        const lastFeedCost = feedCostData[feedCostData.length - 1].value;
+        const feedTrend = firstFeedCost > 0 ? (lastFeedCost - firstFeedCost) / firstFeedCost * 100 : 0;
+        const feedSummary = Math.abs(feedTrend) < 1 ? '↓ Cost stable' : `<span class="${feedTrend > 0 ? 'negative' : 'positive'}">${feedTrend > 0 ? '↑' : '↓'} ${Math.abs(feedTrend).toFixed(0)}%</span> change in daily cost`;
+        container.innerHTML += this.createInsightCardHTML('Feed Cost Trend', feedSummary, this.generateLineChartSVG(feedCostData));
+
+        // FIX: Explicitly convert value to a number to ensure type safety for calculations and chart generation.
+        const eggProdData = logs.map(log => ({ label: this.formatDate(log.date).slice(0, 5), value: log.eggs ? Object.values(log.eggs).reduce((s: number, v: unknown) => s + (Number(v) || 0) * 30, 0) : 0 }));
+        const firstEgg = eggProdData[0].value;
+        const lastEgg = eggProdData[eggProdData.length - 1].value;
+        const eggTrend = firstEgg > 0 ? (lastEgg - firstEgg) / firstEgg * 100 : (lastEgg > 0 ? 100 : 0);
+        const eggSummary = Math.abs(eggTrend) < 1 ? 'Production stable' : `<span class="${eggTrend >= 0 ? 'positive' : 'negative'}">${eggTrend >= 0 ? '↑' : '↓'} ${Math.abs(eggTrend).toFixed(0)}%</span> improvement`;
+        container.innerHTML += this.createInsightCardHTML('Egg Production Trend', eggSummary, this.generateBarChartSVG(eggProdData));
+        
+        const mortalityData = logs.map(log => ({ label: this.formatDate(log.date).slice(0, 5), value: log.mortality || 0 }));
+        const totalMortality = mortalityData.reduce((s, d) => s + d.value, 0);
+        const mortalitySummary = totalMortality === 0 ? 'No mortality recorded' : 'Stable and within an acceptable range';
+        container.innerHTML += this.createInsightCardHTML('Mortality Trend', mortalitySummary, this.generateAreaChartSVG(mortalityData));
+    }
+    
+    private renderBroilersInsights(logs: any[]) { /* Stub for future implementation */ }
+    private renderFishInsights(logs: any[]) { /* Stub for future implementation */ }
+
+    private generateChartSVG(data: {label: string, value: number}[], renderer: (points: {x:number, y:number}[], width: number, height: number, yMax: number) => string): string {
+        const width = 500;
+        const height = 200;
+        const p = 30; // padding
+    
+        const yMax = Math.max(...data.map(d => d.value), 0) * 1.1;
+        const xStep = (width - p * 2) / (data.length - 1);
+    
+        const points = data.map((d, i) => ({
+            x: p + i * xStep,
+            y: height - p - (d.value / (yMax || 1)) * (height - p * 2)
+        }));
+    
+        const gridLines = [0.25, 0.5, 0.75, 1].map(f => `
+            <line class="chart-grid-line" x1="${p}" y1="${height - p - f * (height - p * 2)}" x2="${width - p}" y2="${height - p - f * (height - p * 2)}"/>
+            <text class="chart-label" x="${p-5}" y="${height - p - f * (height - p * 2) + 4}" style="text-anchor: end;">${(f * yMax).toFixed(0)}</text>
+        `).join('');
+
+        const xLabels = data.map((d, i) => `<text class="chart-label" x="${p + i * xStep}" y="${height - p + 15}">${d.label}</text>`).join('');
+    
+        return `
+            <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet">
+                ${gridLines}
+                <line class="chart-axis-line" x1="${p}" y1="${height - p}" x2="${width - p}" y2="${height - p}" />
+                ${renderer(points, width, height, yMax)}
+                ${xLabels}
+            </svg>
+        `;
+    }
+
+    private generateLineChartSVG(data: {label: string, value: number}[]): string {
+        return this.generateChartSVG(data, (points) => {
+            const pathD = "M" + points.map(p => `${p.x} ${p.y}`).join(" L ");
+            return `<path class="chart-line" d="${pathD}" />`;
+        });
+    }
+
+    private generateAreaChartSVG(data: {label: string, value: number}[]): string {
+        return this.generateChartSVG(data, (points, width, height) => {
+            const p = 30;
+            const pathD = "M" + points.map(p => `${p.x} ${p.y}`).join(" L ") + ` L ${width - p} ${height - p} L ${p} ${height-p} Z`;
+            return `<path class="chart-area" d="${pathD}" />`;
+        });
+    }
+
+    private generateBarChartSVG(data: {label: string, value: number}[]): string {
+        const width = 500;
+        const height = 200;
+        const p = 30;
+        const yMax = Math.max(...data.map(d => d.value), 0) * 1.1;
+        const barWidth = ((width - p*2) / data.length) * 0.8;
+
+        const bars = data.map((d, i) => {
+            const barHeight = (d.value / (yMax || 1)) * (height - p * 2);
+            const x = p + i * ((width - p*2) / data.length) + (barWidth*0.1);
+            const y = height - p - barHeight;
+            return `<rect class="chart-bar" x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" />`;
+        }).join('');
+
+        const gridLines = [0.25, 0.5, 0.75, 1].map(f => `
+            <line class="chart-grid-line" x1="${p}" y1="${height - p - f * (height - p * 2)}" x2="${width - p}" y2="${height - p - f * (height - p * 2)}"/>
+            <text class="chart-label" x="${p-5}" y="${height - p - f * (height - p * 2) + 4}" style="text-anchor: end;">${(f * yMax).toFixed(0)}</text>
+        `).join('');
+        
+        const xLabels = data.map((d, i) => `<text class="chart-label" x="${p + i * ((width - p*2) / data.length) + barWidth/2}" y="${height - p + 15}">${d.label}</text>`).join('');
+
+        return `
+            <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet">
+                ${gridLines}
+                <line class="chart-axis-line" x1="${p}" y1="${height - p}" x2="${width - p}" y2="${height - p}" />
+                ${bars}
+                ${xLabels}
+            </svg>
+        `;
+    }
+
 }
 
 export default App;
